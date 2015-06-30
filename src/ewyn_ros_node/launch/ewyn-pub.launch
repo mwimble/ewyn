@@ -1,0 +1,3 @@
+<launch>
+	<node name="ewyn" pkg="ewyn_ros_node" type="ewyn_ros_node" />
+</launch>
