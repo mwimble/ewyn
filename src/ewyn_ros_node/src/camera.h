@@ -12,7 +12,7 @@ private:
 	int processId_;
 	pthread_t processThread_;
 
-	static void *process(void* cameraPtr);
+	static void *process_(void* cameraPtr);
 };
 
 #endif

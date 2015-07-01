@@ -3,6 +3,7 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
+#include <stdint.h>
 #include <string>
 #include <unistd.h>
 
@@ -13,7 +14,7 @@ using namespace cv;
 using namespace std;
 
 Camera::Camera() {
-    processId_ = pthread_create(&processThread_, NULL, process, this);
+    processId_ = pthread_create(&processThread_, NULL, process_, this);
     if (processId_) {
         throw string("Unable to create Camera thread");
     }
@@ -21,9 +22,13 @@ Camera::Camera() {
     ROS_INFO("Camera instantiated");
 }
 
-void *Camera::process(void* cameraPtr) {
+extern ros::NodeHandle* ewynNode;
 
-    sensor_msgs::ImagePtr rosImage;
+void *Camera::process_(void* cameraPtr) {
+    static unsigned int seq = 0;
+    static ros::Publisher originalImagePublisher = ewynNode->advertise<sensor_msgs::Image>("EwynOriginal", 2);
+    static ros::Publisher processedImagePublisher = ewynNode->advertise<sensor_msgs::Image>("EwynProcessed", 2);
+
     VideoCapture cap(0); //capture the video from web cam
 
     if ( !cap.isOpened() )  // if not success, exit program
@@ -59,11 +64,19 @@ void *Camera::process(void* cameraPtr) {
 
         bool bSuccess = cap.read(imgOriginal); // read a new frame from video
 
-         if (!bSuccess) //if not success, break loop
-        {
-             cout << "Cannot read a frame from video stream" << endl;
-             break;
+        if (!bSuccess) {
+            //if not success, break loop 
+            ROS_INFO("Cannot read a frame from video stream");
+            break;
         }
+
+        cv_bridge::CvImage rosOriginalImage;
+        rosOriginalImage.header.seq = seq++;
+        rosOriginalImage.header.stamp = ros::Time::now();
+        rosOriginalImage.header.frame_id = "Ewyn original";
+        rosOriginalImage.encoding = sensor_msgs::image_encodings::BGR8;
+        rosOriginalImage.image = imgOriginal;
+        originalImagePublisher.publish(rosOriginalImage);
 
         Mat imgHSV;
 
@@ -80,6 +93,16 @@ void *Camera::process(void* cameraPtr) {
         //morphological closing (fill small holes in the foreground)
         dilate( imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) ); 
         erode(imgThresholded, imgThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)) );
+
+        Mat result;
+        cvtColor(imgThresholded, result, COLOR_GRAY2BGR);
+        cv_bridge::CvImage rosProcessedImage;
+        rosProcessedImage.header.seq = rosOriginalImage.header.seq;
+        rosProcessedImage.header.stamp = rosOriginalImage.header.stamp;
+        rosProcessedImage.header.frame_id = "Ewyn processed";
+        rosProcessedImage.encoding = sensor_msgs::image_encodings::BGR8;
+        rosProcessedImage.image = result;
+        processedImagePublisher.publish(rosProcessedImage);
 
         imshow("Thresholded Image", imgThresholded); //show the thresholded image
         imshow("Original", imgOriginal); //show the original image

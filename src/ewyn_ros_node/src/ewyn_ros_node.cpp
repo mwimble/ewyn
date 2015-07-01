@@ -5,9 +5,11 @@
 
 using namespace std;
 
+ros::NodeHandle* ewynNode;
+
 int main( int argc, char** argv ) {
     ros::init(argc, argv, "ewyn_ros_node");
-    ros::NodeHandle node;
+    ewynNode = new ros::NodeHandle();
     ros::Rate loopRate(2);
 
     Camera camera = Camera();
